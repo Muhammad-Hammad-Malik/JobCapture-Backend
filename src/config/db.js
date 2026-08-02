@@ -7,7 +7,21 @@ function connectDb() {
     return Promise.resolve(mongoose.connection);
   }
   if (!connectionPromise) {
-    connectionPromise = mongoose.connect(process.env.MONGODB_URI).then(() => mongoose.connection);
+    connectionPromise = mongoose
+      .connect(process.env.MONGODB_URI, {
+        // Cap pool size per serverless instance — under concurrent Vercel invocations each
+        // warm container holds its own pool, so this bounds total connections across instances
+        // rather than letting each one open mongoose's default (larger) pool.
+        maxPoolSize: 5,
+        serverSelectionTimeoutMS: 10000,
+      })
+      .then(() => mongoose.connection)
+      .catch((err) => {
+        // Don't cache a rejected promise — otherwise a transient failure (e.g. Atlas briefly
+        // unreachable) would permanently break every request on this warm container.
+        connectionPromise = null;
+        throw err;
+      });
   }
   return connectionPromise;
 }
