@@ -1,4 +1,10 @@
+const dns = require('dns');
 const mongoose = require('mongoose');
+
+// Node's own DNS resolver (distinct from the OS resolver) can fail to complete the SRV lookup
+// that `mongodb+srv://` URIs need, depending on the local network's DNS server — seen on Windows
+// behind some ISP/router DNS resolvers. Point it at public DNS to sidestep that.
+dns.setServers(['8.8.8.8', '1.1.1.1']);
 
 let connectionPromise = null;
 
