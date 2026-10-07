@@ -2,12 +2,19 @@ const Job = require('../models/Job');
 const ApiError = require('../utils/ApiError');
 const { structureJobPost } = require('../services/geminiService');
 const { normalizeUrl, findDuplicateByUrl, findDuplicate } = require('../services/jobService');
+const { buildClassification } = require('../services/classificationService');
+const { CLASSIFICATION_VERSION } = require('../taxonomy');
+
+const MAX_RAW_TEXT_CHARS = 30000;
 
 async function ingest(req, res, next) {
   try {
     const { rawText, sourceUrl } = req.body || {};
     if (!rawText || typeof rawText !== 'string' || !rawText.trim()) {
       throw new ApiError(400, 'rawText is required.');
+    }
+    if (rawText.length > MAX_RAW_TEXT_CHARS) {
+      throw new ApiError(413, `rawText is too long (max ${MAX_RAW_TEXT_CHARS} characters).`);
     }
 
     // Fast path: if this exact post URL was already ingested, skip the LLM call entirely.
@@ -38,6 +45,11 @@ async function ingest(req, res, next) {
         continue;
       }
 
+      const classification = buildClassification(role);
+      if (classification.warnings.length) {
+        console.warn(`[ingest] classification warnings for "${role.jobTitle}": ${classification.warnings.join('; ')}`);
+      }
+
       const job = await Job.create({
         rawText,
         sourceUrl: sourceUrl || null,
@@ -45,9 +57,15 @@ async function ingest(req, res, next) {
         jobTitle: role.jobTitle,
         company: structured.company,
         isCompanyNameFallback: !!structured.isCompanyNameFallback,
-        stack: role.stack,
-        experienceYears: role.experienceYears ?? null,
-        location: role.location ?? null,
+        categories: classification.categories,
+        skills: classification.skills,
+        unknownSkills: classification.unknownSkills,
+        track: classification.track,
+        stack: classification.stack,
+        classificationVersion: CLASSIFICATION_VERSION,
+        experienceYears: Number.isFinite(role.experienceYears) ? role.experienceYears : null,
+        cities: classification.cities,
+        location: classification.cities.join(', ') || null,
         remoteType: role.remoteType ?? null,
         description: role.description ?? '',
         contactEmail: structured.contactEmail ?? null,

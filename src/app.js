@@ -3,6 +3,7 @@ const cors = require('cors');
 const authRoutes = require('./routes/authRoutes');
 const jobsRoutes = require('./routes/jobsRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const metaRoutes = require('./routes/metaRoutes');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -15,6 +16,7 @@ app.get('/api/health', (req, res) => res.json({ error: false, message: 'ok' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/meta', metaRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

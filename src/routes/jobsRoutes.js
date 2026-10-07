@@ -1,11 +1,16 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { allowSubmitterOrAdmin } = require('../middleware/auth');
+const { rateLimit } = require('../middleware/rateLimit');
 const { ingest } = require('../controllers/ingestController');
 const publicJobsController = require('../controllers/publicJobsController');
 
 const router = express.Router();
 
+// Admins are not throttled; the no-login submitter is (each submission costs an LLM call).
+const submissionLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 30, skip: req => !req.submitter });
+
 router.get('/', publicJobsController.list);
-router.post('/ingest', requireAuth, ingest);
+router.get('/facets', publicJobsController.facets);
+router.post('/ingest', allowSubmitterOrAdmin, submissionLimiter, ingest);
 
 module.exports = router;

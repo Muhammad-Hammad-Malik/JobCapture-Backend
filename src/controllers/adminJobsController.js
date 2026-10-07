@@ -1,16 +1,29 @@
 const Job = require('../models/Job');
 const ApiError = require('../utils/ApiError');
 const { JOB_STATUS_OPTIONS } = require('../constants');
+const { deriveTrack, deriveLegacyStack, normalizeCities } = require('../taxonomy');
 const { normalizeUrl } = require('../services/jobService');
+const escapeRegex = require('../utils/escapeRegex');
+
+const MAX_PAGE_SIZE = 100;
 
 async function list(req, res, next) {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.max(1, parseInt(req.query.limit, 10) || 20);
+    const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const filter = { deletedAt: null };
 
+    if (JOB_STATUS_OPTIONS.includes(req.query.status)) filter.status = req.query.status;
+
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    if (search) {
+      const rx = new RegExp(escapeRegex(search), 'i');
+      filter.$or = [{ jobTitle: rx }, { company: rx }];
+    }
+
+    // rawText is large and never shown in the list; it is still returned by GET /jobs/:id.
     const [data, total] = await Promise.all([
-      Job.find(filter)
+      Job.find(filter, '-rawText')
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit),
@@ -38,6 +51,9 @@ const EDITABLE_FIELDS = [
   'company',
   'isCompanyNameFallback',
   'stack',
+  'categories',
+  'skills',
+  'cities',
   'experienceYears',
   'location',
   'remoteType',
@@ -55,6 +71,14 @@ async function update(req, res, next) {
     for (const field of EDITABLE_FIELDS) {
       if (Object.prototype.hasOwnProperty.call(req.body || {}, field)) {
         updates[field] = req.body[field];
+      }
+    }
+    if (Array.isArray(updates.cities)) updates.cities = normalizeCities(updates.cities);
+    if (Array.isArray(updates.categories)) {
+      // Keep the derived fields consistent with what the admin picked.
+      updates.track = deriveTrack(updates.categories);
+      if (!Object.prototype.hasOwnProperty.call(updates, 'stack')) {
+        updates.stack = deriveLegacyStack(updates.categories, updates.skills || []);
       }
     }
     if (Object.prototype.hasOwnProperty.call(updates, 'sourceUrl')) {
