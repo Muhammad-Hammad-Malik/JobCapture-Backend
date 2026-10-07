@@ -6,6 +6,7 @@
  *     node src/scripts/reclassifyJobs.js [--limit 30] [--concurrency 4] [--model google/gemini-2.5-flash]
  *                                        [--ids id1,id2] [--include-cleared]
  *     node src/scripts/reclassifyJobs.js --resume reports/<report>.json   # redo only the failed entries
+ *   Uses the FREE model by default and never falls back to a paid one unless --paid-fallback is given.
  *
  *   APPLY — writes exactly what a (reviewed / hand-edited) report says. No LLM calls:
  *     node src/scripts/reclassifyJobs.js --apply --from reports/reclassify-<ts>.json [--allow-remote]
@@ -19,7 +20,7 @@ const mongoose = require('mongoose');
 const { connectDb } = require('../config/db');
 const Job = require('../models/Job');
 const { CLASSIFY_PROMPT } = require('../prompts/classifyPrompt');
-const { callLlmJson } = require('../services/llmClient');
+const { callLlmJson, DEFAULT_PRIMARY_MODEL } = require('../services/llmClient');
 const { buildClassification } = require('../services/classificationService');
 const { titleHints } = require('../taxonomy/titleRules');
 const { CLASSIFICATION_VERSION } = require('../taxonomy');
@@ -51,7 +52,7 @@ function csvCell(v) {
   return `"${s.replace(/"/g, '""')}"`;
 }
 
-async function classifyOne(job, model) {
+async function classifyOne(job, model, allowPaidFallback = false) {
   const prompt = CLASSIFY_PROMPT
     .replace('{{TITLE}}', () => job.jobTitle)
     .replace('{{COMPANY}}', () => job.company)
@@ -62,6 +63,7 @@ async function classifyOne(job, model) {
 
   const llm = await callLlmJson(prompt, {
     model,
+    fallback: allowPaidFallback, // never spend credits implicitly; pass --paid-fallback to allow it
     maxTokens: 2048,
     validate: p => { if (!p || !Array.isArray(p.categories)) throw new Error('missing categories'); },
   });
@@ -133,14 +135,14 @@ async function dryRun(args) {
   let jobs = await Job.find(filter).sort({ createdAt: -1 });
   if (args.limit) jobs = jobs.slice(0, parseInt(args.limit, 10));
 
-  const model = args.model || (previous && previous.model) || process.env.MIGRATION_MODEL || 'google/gemini-2.5-flash';
+  const model = args.model || (previous && previous.model) || process.env.MIGRATION_MODEL || DEFAULT_PRIMARY_MODEL;
   const concurrency = parseInt(args.concurrency, 10) || 4;
   console.log(`Classifying ${jobs.length} job(s) with ${model} (concurrency ${concurrency})...`);
 
   let done = 0;
   let entries = await runPool(jobs, concurrency, async job => {
     try {
-      return await classifyOne(job, model);
+      return await classifyOne(job, model, !!args['paid-fallback']);
     } catch (e) {
       return {
         _id: String(job._id),
@@ -214,10 +216,14 @@ async function apply(args) {
       classificationVersion: CLASSIFICATION_VERSION,
       classificationConfidence: e.after.confidence ?? null,
     };
-    if (e.before?.experienceYears == null && Number.isFinite(e.after.experienceYears)) {
-      $set.experienceYears = e.after.experienceYears;
-    }
     ops.push({ updateOne: { filter: { _id: e._id }, update: { $set } } });
+    // Fill experience only where the live value is still empty, so an edit made since the report
+    // was generated can never be overwritten.
+    if (e.before?.experienceYears == null && Number.isFinite(e.after.experienceYears)) {
+      ops.push({
+        updateOne: { filter: { _id: e._id, experienceYears: null }, update: { $set: { experienceYears: e.after.experienceYears } } },
+      });
+    }
   }
 
   console.log(`Applying ${ops.length} update(s) to ${target.host} (${skipped} skipped)...`);
