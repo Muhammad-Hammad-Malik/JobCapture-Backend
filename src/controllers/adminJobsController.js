@@ -73,8 +73,16 @@ async function update(req, res, next) {
         updates[field] = req.body[field];
       }
     }
-    if (Array.isArray(updates.cities)) updates.cities = normalizeCities(updates.cities);
+    if (Array.isArray(updates.cities)) {
+      updates.cities = normalizeCities(updates.cities);
+      if (!Object.prototype.hasOwnProperty.call(updates, 'location')) {
+        updates.location = updates.cities.join(', ') || null; // keep the legacy mirror in sync
+      }
+    }
     if (Array.isArray(updates.categories)) {
+      if (updates.categories.length === 0) {
+        throw new ApiError(400, 'A job needs at least one category.');
+      }
       // Keep the derived fields consistent with what the admin picked.
       updates.track = deriveTrack(updates.categories);
       if (!Object.prototype.hasOwnProperty.call(updates, 'stack')) {
