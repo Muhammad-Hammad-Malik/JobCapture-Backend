@@ -4,10 +4,13 @@ const { structureJobPost } = require('../services/geminiService');
 const { normalizeUrl, findDuplicateByUrl, findDuplicate } = require('../services/jobService');
 const { buildClassification } = require('../services/classificationService');
 const { CLASSIFICATION_VERSION } = require('../taxonomy');
+const { recordServerEvent } = require('../services/analyticsCollector');
 
 const MAX_RAW_TEXT_CHARS = 30000;
 
 async function ingest(req, res, next) {
+  const startedAt = Date.now();
+  const by = req.submitter ? 'submitter' : 'admin';
   try {
     const { rawText, sourceUrl } = req.body || {};
     if (!rawText || typeof rawText !== 'string' || !rawText.trim()) {
@@ -79,8 +82,10 @@ async function ingest(req, res, next) {
 
     const createdCount = results.filter(r => r.status === 'created').length;
     const duplicateCount = results.length - createdCount;
+    recordServerEvent('ingest_ok', { by, ms: Date.now() - startedAt, created: createdCount, duplicates: duplicateCount });
     res.json({ error: false, results, createdCount, duplicateCount });
   } catch (e) {
+    recordServerEvent('ingest_fail', { by, ms: Date.now() - startedAt, reason: e.status ? `HTTP ${e.status}` : 'error' });
     next(e);
   }
 }

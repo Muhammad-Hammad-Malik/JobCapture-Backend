@@ -3,7 +3,7 @@ const ApiError = require('../utils/ApiError');
 // Small in-memory sliding-window limiter, keyed by client IP. On serverless each warm instance
 // keeps its own counters, so this is a best-effort brake against runaway/abusive clients (every
 // submission costs an LLM call), not a hard global quota.
-function rateLimit({ windowMs, max, skip }) {
+function rateLimit({ windowMs, max, skip, message }) {
   const hits = new Map();
 
   return function limiter(req, res, next) {
@@ -16,7 +16,7 @@ function rateLimit({ windowMs, max, skip }) {
     if (recent.length >= max) {
       const retryAfter = Math.ceil((windowMs - (now - recent[0])) / 1000);
       res.set('Retry-After', String(retryAfter));
-      return next(new ApiError(429, `Too many submissions. Try again in ${retryAfter}s.`));
+      return next(new ApiError(429, `${message || 'Too many requests.'} Try again in ${retryAfter}s.`));
     }
 
     recent.push(now);
