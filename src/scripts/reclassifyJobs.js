@@ -20,7 +20,10 @@ const mongoose = require('mongoose');
 const { connectDb } = require('../config/db');
 const Job = require('../models/Job');
 const { CLASSIFY_PROMPT } = require('../prompts/classifyPrompt');
-const { callLlmJson, DEFAULT_PRIMARY_MODEL } = require('../services/llmClient');
+const { callLlmJson } = require('../services/llmClient');
+
+// Migrations default to a FREE model so nothing spends credits implicitly; pass --model to change.
+const DEFAULT_PRIMARY_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
 const { buildClassification } = require('../services/classificationService');
 const { titleHints } = require('../taxonomy/titleRules');
 const { CLASSIFICATION_VERSION } = require('../taxonomy');

@@ -7,7 +7,7 @@ Express + MongoDB backend for the JobCapture job board: ingests LinkedIn job pos
 - Node.js + Express
 - MongoDB (Mongoose)
 - JWT auth (single admin account, credentials from environment variables — no admin DB collection)
-- OpenRouter (LLM structuring: free `nvidia/nemotron-3-super-120b-a12b:free` first, falling back to the paid `google/gemini-2.5-flash-lite`)
+- OpenRouter (LLM structuring: `google/gemini-2.5-flash-lite`, single model, no fallback)
 
 ## Setup
 

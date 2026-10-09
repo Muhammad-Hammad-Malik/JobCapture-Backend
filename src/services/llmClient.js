@@ -2,11 +2,11 @@ const ApiError = require('../utils/ApiError');
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-// Free model first; if it fails (rate limit, outage, bad output) fall back to the paid model the
-// app has always used. Both are overridable via env: OPENROUTER_MODEL / OPENROUTER_FALLBACK_MODEL
-// (set the fallback to an empty string to disable paid fallback entirely).
-const DEFAULT_PRIMARY_MODEL = 'nvidia/nemotron-3-super-120b-a12b:free';
-const DEFAULT_FALLBACK_MODEL = 'google/gemini-2.5-flash-lite';
+// One paid model, no fallback (free reasoning models were ~10x slower). OPENROUTER_MODEL and
+// OPENROUTER_FALLBACK_MODEL are deliberately ignored so deployments that still carry the old
+// free-primary/paid-fallback values keep working unchanged. Optional override: LLM_MODEL.
+const DEFAULT_PRIMARY_MODEL = 'google/gemini-2.5-flash-lite';
+const DEFAULT_FALLBACK_MODEL = '';
 
 // An explicit max_tokens matters: without it OpenRouter reserves the model's maximum (tens of
 // thousands of tokens) against the account balance and can reject requests with HTTP 402.
@@ -18,16 +18,8 @@ function stripCodeFences(text) {
   return fenced ? fenced[1] : trimmed;
 }
 
-function configuredModels({ model, fallback = true } = {}) {
-  const primary = model || process.env.OPENROUTER_MODEL || DEFAULT_PRIMARY_MODEL;
-  const fallbackModel =
-    process.env.OPENROUTER_FALLBACK_MODEL === undefined
-      ? DEFAULT_FALLBACK_MODEL
-      : process.env.OPENROUTER_FALLBACK_MODEL.trim();
-  return {
-    primary,
-    fallback: fallback && fallbackModel && fallbackModel !== primary ? fallbackModel : null,
-  };
+function configuredModels({ model } = {}) {
+  return { primary: model || process.env.LLM_MODEL || DEFAULT_PRIMARY_MODEL, fallback: null };
 }
 
 // Sends one prompt to OpenRouter and returns the raw message text.
@@ -72,9 +64,7 @@ async function callLlm(prompt, { models, maxTokens } = {}) {
 
 /**
  * Calls the LLM and parses JSON.
- *  - 1st attempt: free primary model, with the paid model as automatic provider-level fallback.
- *  - 2nd attempt (only if the 1st returned unusable output): the fallback model directly.
- * Pass `{ fallback: false }` to never touch a paid model (e.g. migration scripts).
+ *  - Calls the single configured model, retrying once if the output was unusable.
  */
 async function callLlmJson(prompt, { model, validate, maxTokens, fallback = true } = {}) {
   const { primary, fallback: fallbackModel } = configuredModels({ model, fallback });
