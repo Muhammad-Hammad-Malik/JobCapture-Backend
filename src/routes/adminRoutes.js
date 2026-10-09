@@ -18,6 +18,7 @@ router.delete('/jobs/:id', adminJobsController.remove);
 router.get('/emails', emailsController.list);
 router.get('/analytics', analyticsController.dashboard);
 router.get('/company-submissions', adminCompanies.listSubmissions);
+router.post('/company-submissions/approve-all', adminCompanies.approveAll);
 router.patch('/company-submissions/:id', adminCompanies.decide);
 router.post('/companies/merge', adminCompanies.merge);
 

@@ -8,6 +8,8 @@ const submissionSchema = new mongoose.Schema(
     type: { type: String, enum: ['email', 'size'], required: true },
     value: { type: String, required: true },
     status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending', index: true },
+    source: { type: String, enum: ['community', 'research'], default: 'community' },
+    note: { type: String, default: null }, // e.g. where a researched value came from
     ipHash: String,
     decidedAt: Date,
   },

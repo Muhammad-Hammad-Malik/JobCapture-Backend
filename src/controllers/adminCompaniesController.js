@@ -6,8 +6,36 @@ const ApiError = require('../utils/ApiError');
 async function listSubmissions(req, res, next) {
   try {
     const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
-    const items = await CompanySubmission.find({ status }).sort({ createdAt: -1 }).limit(200).select('-ipHash').lean();
+    const items = await CompanySubmission.find({ status }).sort({ createdAt: -1 }).limit(600).select('-ipHash').lean();
     res.json({ error: false, items });
+  } catch (e) { next(e); }
+}
+
+async function applySubmission(sub) {
+  if (sub.type === 'size') {
+    await Company.updateOne({ key: sub.companyKey }, { size: sub.value });
+  } else {
+    await Company.updateOne(
+      { key: sub.companyKey, 'communityEmails.email': { $ne: sub.value } },
+      { $push: { communityEmails: { email: sub.value, addedAt: new Date() } } },
+    );
+  }
+}
+
+// Approves every pending suggestion of one kind (used for batches of researched company sizes).
+async function approveAll(req, res, next) {
+  try {
+    const { type, source } = req.body || {};
+    if (type !== 'size') throw new ApiError(400, 'Only type "size" can be approved in bulk.');
+    const filter = { status: 'pending', type: 'size', ...(source ? { source } : {}) };
+    const subs = await CompanySubmission.find(filter);
+    for (const sub of subs) {
+      await applySubmission(sub);
+      sub.status = 'approved';
+      sub.decidedAt = new Date();
+      await sub.save();
+    }
+    res.json({ error: false, approved: subs.length });
   } catch (e) { next(e); }
 }
 
@@ -19,16 +47,7 @@ async function decide(req, res, next) {
     if (!sub) throw new ApiError(404, 'Submission not found.');
     if (sub.status !== 'pending') throw new ApiError(409, `Already ${sub.status}.`);
 
-    if (action === 'approve') {
-      if (sub.type === 'size') {
-        await Company.updateOne({ key: sub.companyKey }, { size: sub.value });
-      } else {
-        await Company.updateOne(
-          { key: sub.companyKey, 'communityEmails.email': { $ne: sub.value } },
-          { $push: { communityEmails: { email: sub.value, addedAt: new Date() } } },
-        );
-      }
-    }
+    if (action === 'approve') await applySubmission(sub);
     sub.status = action === 'approve' ? 'approved' : 'rejected';
     sub.decidedAt = new Date();
     await sub.save();
@@ -57,4 +76,4 @@ async function merge(req, res, next) {
   } catch (e) { next(e); }
 }
 
-module.exports = { listSubmissions, decide, merge };
+module.exports = { listSubmissions, decide, approveAll, merge };
