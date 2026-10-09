@@ -1,5 +1,6 @@
 const Job = require('../models/Job');
 const escapeRegex = require('../utils/escapeRegex');
+const { companyKey } = require('../utils/companyKey');
 
 function normalizeUrl(url) {
   if (!url || typeof url !== 'string') return null;
@@ -13,10 +14,14 @@ function findDuplicateByUrl(sourceUrl) {
   return Job.findOne({ sourceUrlNormalized: normalized, deletedAt: null });
 }
 
+// Same role at the same company: matches the exact name, or any spelling that normalises to the
+// same company key (e.g. "Acme Pvt Ltd" vs "ACME").
 function findDuplicate(company, jobTitle) {
+  const key = companyKey(company);
+  const title = new RegExp(`^${escapeRegex(jobTitle)}$`, 'i');
   return Job.findOne({
-    company: new RegExp(`^${escapeRegex(company)}$`, 'i'),
-    jobTitle: new RegExp(`^${escapeRegex(jobTitle)}$`, 'i'),
+    $or: [{ company: new RegExp(`^${escapeRegex(company)}$`, 'i') }, ...(key ? [{ companyKey: key }] : [])],
+    jobTitle: title,
     deletedAt: null,
   });
 }

@@ -5,6 +5,7 @@ const jobsRoutes = require('./routes/jobsRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const metaRoutes = require('./routes/metaRoutes');
 const trackRoutes = require('./routes/trackRoutes');
+const companiesRoutes = require('./routes/companiesRoutes');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -19,6 +20,7 @@ app.use('/api/jobs', jobsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/meta', metaRoutes);
 app.use('/api/t', trackRoutes);
+app.use('/api/companies', companiesRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

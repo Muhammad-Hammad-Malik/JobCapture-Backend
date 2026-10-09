@@ -14,6 +14,8 @@ const jobSchema = new mongoose.Schema(
     jobTitle: { type: String, required: true },
     company: { type: String, required: true },
     isCompanyNameFallback: { type: Boolean, default: false },
+    // Normalised company key (see utils/companyKey.js); null when the 'company' is just the poster's name.
+    companyKey: { type: String, default: null, index: true },
 
     // --- Classification (multi-valued). `categories[0]` is the primary category.
     categories: { type: [{ type: String, enum: CATEGORIES }], default: [] },

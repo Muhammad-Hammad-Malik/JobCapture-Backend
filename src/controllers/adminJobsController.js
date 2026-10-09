@@ -4,6 +4,7 @@ const { JOB_STATUS_OPTIONS } = require('../constants');
 const { deriveTrack, deriveLegacyStack, normalizeCities } = require('../taxonomy');
 const { normalizeUrl } = require('../services/jobService');
 const escapeRegex = require('../utils/escapeRegex');
+const { registerCompany } = require('../services/companyService');
 
 const MAX_PAGE_SIZE = 100;
 
@@ -91,6 +92,16 @@ async function update(req, res, next) {
     }
     if (Object.prototype.hasOwnProperty.call(updates, 'sourceUrl')) {
       updates.sourceUrlNormalized = normalizeUrl(updates.sourceUrl);
+    }
+
+    if ('company' in updates || 'isCompanyNameFallback' in updates) {
+      const current = await Job.findById(req.params.id).select('company isCompanyNameFallback posterName').lean();
+      if (!current) throw new ApiError(404, 'Job not found.');
+      const merged = { ...current, ...updates };
+      updates.companyKey = await registerCompany(merged.company, {
+        fallback: !!merged.isCompanyNameFallback,
+        posterName: 'posterName' in updates ? updates.posterName : current.posterName,
+      });
     }
 
     const job = await Job.findByIdAndUpdate(req.params.id, updates, {

@@ -3,7 +3,7 @@
  * (categories[], skills[], cities[], track, ...).
  *
  *   DRY RUN (default) — calls the LLM, writes a reviewable report, changes NOTHING in the DB:
- *     node src/scripts/reclassifyJobs.js [--limit 30] [--concurrency 4] [--model google/gemini-2.5-flash]
+ *     node src/scripts/reclassifyJobs.js [--only-cleared] [--limit 30] [--concurrency 4] [--model google/gemini-2.5-flash]
  *                                        [--ids id1,id2] [--include-cleared]
  *     node src/scripts/reclassifyJobs.js --resume reports/<report>.json   # redo only the failed entries
  *   Uses the FREE model by default and never falls back to a paid one unless --paid-fallback is given.
@@ -126,6 +126,11 @@ async function dryRun(args) {
   const filter = { deletedAt: null };
   if (args.ids) filter._id = { $in: String(args.ids).split(',') };
   if (args['include-cleared']) delete filter.deletedAt;
+  // Only the cleared (soft-deleted) jobs that were never classified — avoids paying twice for done work.
+  if (args['only-cleared']) {
+    filter.deletedAt = { $ne: null };
+    filter.classificationVersion = { $ne: CLASSIFICATION_VERSION };
+  }
 
   let previous = null;
   if (args.resume && args.resume !== true) {

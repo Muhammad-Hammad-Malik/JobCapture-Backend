@@ -4,6 +4,7 @@ const AnalyticsEvent = require('../models/AnalyticsEvent');
 const CLIENT_TYPES = new Set([
   'pageview', 'page_leave', 'job_open', 'apply_click', 'email_click', 'source_click',
   'search', 'filter', 'track_switch', 'page_change', 'perf', 'api_error', 'api_slow', 'js_error',
+  'company_open', 'company_submit',
 ]);
 const MAX_BATCH = 25;
 const ID_RE = /^[A-Za-z0-9-]{8,64}$/;
@@ -127,4 +128,4 @@ async function recordServerEvent(type, data) {
   }
 }
 
-module.exports = { recordClientEvents, recordServerEvent, parseUserAgent };
+module.exports = { recordClientEvents, recordServerEvent, parseUserAgent, hashIp };

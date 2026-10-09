@@ -5,6 +5,7 @@ const { normalizeUrl, findDuplicateByUrl, findDuplicate } = require('../services
 const { buildClassification } = require('../services/classificationService');
 const { CLASSIFICATION_VERSION } = require('../taxonomy');
 const { recordServerEvent } = require('../services/analyticsCollector');
+const { registerCompany } = require('../services/companyService');
 
 const MAX_RAW_TEXT_CHARS = 30000;
 
@@ -48,6 +49,10 @@ async function ingest(req, res, next) {
         continue;
       }
 
+      const companyKey = await registerCompany(structured.company, {
+        fallback: !!structured.isCompanyNameFallback,
+        posterName: structured.posterName,
+      });
       const classification = buildClassification(role);
       if (classification.warnings.length) {
         console.warn(`[ingest] classification warnings for "${role.jobTitle}": ${classification.warnings.join('; ')}`);
@@ -60,6 +65,7 @@ async function ingest(req, res, next) {
         jobTitle: role.jobTitle,
         company: structured.company,
         isCompanyNameFallback: !!structured.isCompanyNameFallback,
+        companyKey,
         categories: classification.categories,
         skills: classification.skills,
         unknownSkills: classification.unknownSkills,
